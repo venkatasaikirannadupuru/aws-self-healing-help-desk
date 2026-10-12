@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Help Desk | Support Portal</title>
+</head>
+<body>
+    <h1>IT Help Desk</h1>
+    <p>Create a support ticket and track its status.</p>
+
+    <h2>Create a Ticket</h2>
+    <form action="/tickets" method="POST">
+        <label for="title">Issue Title</label><br>
+        <input id="title" name="title" required><br><br>
+
+        <label for="description">Issue Description</label><br>
+        <textarea id="description" name="description" required></textarea><br><br>
+
+        <button type="submit">Submit Ticket</button>
+    </form>
+
+    <h2>Support Tickets</h2>
+    {% if tickets %}
+        {% for ticket in tickets %}
+            <article>
+                <h3>#{{ ticket.id }} - {{ ticket.title }}</h3>
+                <p>{{ ticket.description }}</p>
+                <p>Status: {{ ticket.status }}</p>
+            </article>
+            <hr>
+        {% endfor %}
+    {% else %}
+        <p>No tickets yet. Create your first ticket above.</p>
+    {% endif %}
+</body>
+</html>
