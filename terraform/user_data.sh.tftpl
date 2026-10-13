@@ -1,0 +1,14 @@
+#!/bin/bash
+set -euxo pipefail
+dnf update -y
+dnf install -y docker
+systemctl enable --now docker
+aws ecr get-login-password --region ${aws_region} \
+  | docker login --username AWS --password-stdin ${ecr_url}
+docker pull ${ecr_url}:${image_tag}
+docker rm -f helpdesk-app || true
+docker run -d \
+  --name helpdesk-app \
+  --restart unless-stopped \
+  -p 5000:5000 \
+  ${ecr_url}:${image_tag}
