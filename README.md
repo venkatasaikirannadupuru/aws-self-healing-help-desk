@@ -142,7 +142,7 @@ The Jenkinsfile expects:
 - Docker, AWS CLI, Python, pip, and pytest available on the Jenkins agent.
 - The ECR repository and ASG created by the bootstrap apply.
 
-Run the pipeline. It runs tests and the SonarQube quality gate before building and pushing the build-number tag and latest to ECR. Its deployment stage requests one ASG instance and starts an instance refresh.
+Run the pipeline. It runs tests and the SonarQube quality gate before building and pushing the build-number tag and latest to ECR. Its deployment stage requests one ASG instance and starts an instance refresh. After the pipeline, set desired_capacity = 1 in terraform/terraform.tfvars and run terraform plan followed by terraform apply to reconcile Terraform state with the deployed capacity. Keep the value at zero only when you intentionally want the ASG scaled down.
 
 ### 3. Verify the application and recovery
 
