@@ -5,3 +5,10 @@ __pycache__/
 .env
 .coverage
 htmlcov/
+
+# Terraform local state and generated files
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform/terraform.tfvars
