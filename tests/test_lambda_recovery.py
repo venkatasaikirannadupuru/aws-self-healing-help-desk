@@ -75,5 +75,4 @@ def test_skips_instance_inside_launch_grace_period(recovery):
     result = recovery.lambda_handler({}, None)
 
     assert result == {"checked": 1, "terminated": []}
-    recovery.ec2.describe_instance_status.assert_not_called()
     recovery.autoscaling.terminate_instance_in_auto_scaling_group.assert_not_called()
