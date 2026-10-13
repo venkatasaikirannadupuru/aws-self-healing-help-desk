@@ -15,7 +15,7 @@ resource "aws_lb" "app" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
-  tags = { Name = "${var.project_name}-alb" }
+  tags               = { Name = "${var.project_name}-alb" }
 }
 resource "aws_lb_target_group" "app" {
   name        = "helpdesk-${var.environment}-tg"
@@ -60,7 +60,7 @@ resource "aws_launch_template" "app" {
   update_default_version = true
   tag_specifications {
     resource_type = "instance"
-    tags = { Name = "${var.project_name}-app" }
+    tags          = { Name = "${var.project_name}-app" }
   }
   depends_on = [aws_iam_role_policy_attachment.ecr_read_only]
   lifecycle {

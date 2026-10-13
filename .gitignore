@@ -12,3 +12,6 @@ htmlcov/
 *.tfstate.*
 *.tfplan
 terraform/terraform.tfvars
+
+# Generated Lambda deployment archive
+terraform/lambda_recovery.zip

@@ -14,3 +14,13 @@ output "target_group_arn" {
   description = "Target group monitored by the load balancer health check."
   value       = aws_lb_target_group.app.arn
 }
+
+output "recovery_lambda_name" {
+  description = "Lambda function that checks instance and ALB health and requests ASG replacement."
+  value       = aws_lambda_function.recovery.function_name
+}
+
+output "recovery_schedule_name" {
+  description = "CloudWatch Events schedule that invokes the recovery Lambda every five minutes."
+  value       = aws_cloudwatch_event_rule.recovery_schedule.name
+}
