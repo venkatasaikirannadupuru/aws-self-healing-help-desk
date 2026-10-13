@@ -11,6 +11,8 @@ MODULE_PATH = Path(__file__).resolve().parents[1] / "terraform" / "lambda_recove
 
 @pytest.fixture
 def recovery(monkeypatch):
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+    monkeypatch.setenv("AWS_EC2_METADATA_DISABLED", "true")
     monkeypatch.setenv("ASG_NAME", "test-asg")
     monkeypatch.setenv("TARGET_GROUP_ARN", "arn:aws:elasticloadbalancing:region:account:targetgroup/test/abc")
     spec = importlib.util.spec_from_file_location("lambda_recovery", MODULE_PATH)
