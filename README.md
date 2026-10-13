@@ -1,57 +1,80 @@
+
 # AWS Self-Healing IT Help Desk
 
-A portfolio project combining a Flask-based IT support ticket portal, Docker packaging, Jenkins CI, SonarQube quality checks, Amazon ECR, and Terraform-managed AWS infrastructure.
+A hands-on AWS project that combines a Flask-based IT support ticket portal, Docker, Jenkins CI/CD, SonarQube quality checks, Amazon ECR, Terraform, and automated EC2 instance recovery.
 
-The recovery workflow uses a scheduled CloudWatch Events (EventBridge) rule to invoke a Lambda function. Lambda checks the Auto Scaling Group's current EC2 instances and ALB target health, then asks the ASG to replace instances that remain impaired or unhealthy beyond a startup grace period.
+The application runs on EC2 instances managed by an Auto Scaling Group (ASG) and receives traffic through an Application Load Balancer (ALB). A scheduled AWS Lambda function checks EC2 status and ALB target health, then requests replacement of qualifying unhealthy instances through Auto Scaling.
 
-> **Scope note:** this project implements instance-level recovery, not application-code remediation. Tickets are held in process memory and are not durable across restarts.
+> **Project status:** Application deployment, Jenkins pipeline, AWS health checks, scheduled Lambda execution, and all 7 automated tests have been verified. End-to-end Lambda-triggered instance recovery remains to be demonstrated.
 
-## Project highlights
+## Highlights
 
-- Responsive Help Desk dashboard for creating and reviewing support tickets.
-- Flask health endpoint: GET /health.
+- Flask-based Help Desk dashboard for creating and viewing support tickets.
+- `/health` endpoint for application health checks.
+- Docker-based application packaging.
+- Jenkins pipeline for tests, SonarQube analysis, quality gate, Docker build, ECR push, and ASG deployment.
+- Terraform-managed AWS infrastructure.
+- Application Load Balancer and target-group health checks.
+- EC2 Auto Scaling Group with configurable desired capacity.
+- Scheduled Lambda health checks through Amazon EventBridge.
+- CloudWatch Logs for troubleshooting and execution evidence.
 - Automated tests using pytest.
-- Jenkins stages for tests, SonarQube analysis, quality gate, Docker build, ECR push, and ASG deployment.
-- Terraform-managed VPC, public subnets in two Availability Zones, internet gateway, security groups, IAM roles, ECR, ALB, target group, launch template, and Auto Scaling Group.
-- Scheduled Lambda health checks for current ASG instances.
-- EC2 system/instance status and ALB target health checks, with a five-minute launch grace period.
-- Replacement of unhealthy instances through Auto Scaling without reducing desired capacity.
-- Lambda logs in CloudWatch Logs and an architecture diagram.
 
 ## Architecture
 
-![AWS self-healing Help Desk architecture](docs/architecture.svg)
+![AWS Self-Healing IT Help Desk architecture](docs/architecture.svg)
 
-Editable Mermaid source: [docs/architecture.md](docs/architecture.md).
+Editable architecture source: [docs/architecture.md](docs/architecture.md)
 
-## Technology stack
+### Request flow
 
-| Area | Tools |
+1. A user opens the Help Desk URL.
+2. The Application Load Balancer receives the HTTP request.
+3. The ALB forwards traffic to a healthy registered EC2 target on port `5000`.
+4. A Docker container runs the Flask application.
+5. The target group's `/health` endpoint provides the HTTP health-check response.
+
+### Recovery flow
+
+1. Amazon EventBridge invokes the recovery Lambda on its configured schedule.
+2. Lambda retrieves the ASG's `InService` instances.
+3. It checks EC2 system and instance status, launch times, and ALB target health.
+4. It skips instances that are still within the configured launch grace period.
+5. If an eligible instance has an impaired EC2 status check or an `unhealthy` ALB target state, Lambda requests termination through Auto Scaling without decrementing desired capacity.
+6. The ASG is expected to launch a replacement instance.
+7. The new instance and ALB target must be checked to confirm recovery.
+
+**Important:** A successful Lambda invocation alone does not prove that automatic recovery occurred. End-to-end recovery is confirmed only after observing the unhealthy condition, Lambda's replacement action, a new instance entering `InService`, and a healthy ALB target.
+
+## Technology Stack
+
+| Category | Technologies |
 |---|---|
 | Application | Python, Flask, Jinja templates |
-| Container | Docker |
-| CI and quality | Jenkins, pytest, SonarQube |
-| Image registry | Amazon ECR |
-| AWS runtime | EC2, Auto Scaling, Application Load Balancer |
-| Recovery | AWS Lambda, CloudWatch Events/EventBridge, CloudWatch Logs |
-| Networking and access | VPC, public subnets, security groups, IAM |
+| Containers | Docker |
+| CI/CD | Jenkins |
+| Code quality | SonarQube |
+| Testing | pytest |
+| Container registry | Amazon ECR |
+| Compute | Amazon EC2, Auto Scaling Group |
+| Traffic management | Application Load Balancer, target group |
+| Recovery automation | AWS Lambda, Amazon EventBridge |
+| Monitoring | Amazon CloudWatch Logs |
 | Infrastructure as Code | Terraform |
+| Networking and access | VPC, subnets, security groups, IAM |
 
-## Repository structure
+## Repository Structure
 
-~~~text
+```text
 .
-├── app/main.py
-├── templates/index.html
-├── tests/test_main.py
-├── Dockerfile
-├── Dockerfile.jenkins
-├── Jenkinsfile
-├── requirements.txt
-├── sonar-project.properties
+├── app/
+│   └── main.py
+├── templates/
+│   └── index.html
+├── tests/
+│   ├── test_main.py
+│   └── test_lambda_recovery.py
 ├── terraform/
-│   ├── versions.tf
-│   ├── variables.tf
 │   ├── networking.tf
 │   ├── security.tf
 │   ├── iam.tf
@@ -61,134 +84,256 @@ Editable Mermaid source: [docs/architecture.md](docs/architecture.md).
 │   ├── user_data.sh.tftpl
 │   ├── outputs.tf
 │   └── terraform.tfvars.example
-└── docs/
-    ├── architecture.md
-    ├── architecture.svg
-    └── screenshots/
-~~~
+├── docs/
+│   ├── architecture.md
+│   ├── architecture.svg
+│   └── screenshots/
+├── Dockerfile
+├── Dockerfile.jenkins
+├── Jenkinsfile
+├── requirements.txt
+├── sonar-project.properties
+└── README.md
+```
 
-## Run locally
+*This structure reflects the project layout; check the repository if files have changed.*
 
-Requirements: Python 3.10+ and pip.
+## Prerequisites
 
-~~~bash
+- Git
+- Python compatible with the project's dependencies
+- Docker
+- AWS CLI
+- Terraform
+- An AWS account with permissions for the resources in the Terraform plan
+- Jenkins and SonarQube configuration if running the full pipeline
+
+The project has been deployed in AWS Mumbai (`ap-south-1`).
+
+## Run Locally
+
+Clone the repository:
+
+```bash
 git clone https://github.com/venkatasaikirannadupuru/aws-self-healing-help-desk.git
 cd aws-self-healing-help-desk
+```
 
+Create and activate a virtual environment.
+
+**Windows Git Bash:**
+
+```bash
 python -m venv .venv
-# Windows Git Bash:
 source .venv/Scripts/activate
-# Linux/macOS:
-# source .venv/bin/activate
+```
 
+**Linux/macOS:**
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+Install dependencies:
+
+```bash
 python -m pip install -r requirements.txt
+```
+
+Start the application using the project's configured entry point:
+
+```bash
 python -m app.main
-~~~
+```
 
-Open http://127.0.0.1:5000. Health check: http://127.0.0.1:5000/health.
+Open `http://127.0.0.1:5000`.
 
-Run tests:
+Health endpoint: `http://127.0.0.1:5000/health`
 
-~~~bash
-python -m pytest -v
-~~~
+If the current application version uses a different entry point, use the run command defined by that version.
 
-Run as a container:
+## Run Tests
 
-~~~bash
+Run the tests from the **repository root**:
+
+```bash
+python -m pytest -v tests/
+```
+
+Latest recorded test result:
+
+```text
+7 passed in 2.45s
+```
+
+The test suite covers:
+
+- Home page rendering
+- Health endpoint
+- Ticket creation
+- Required ticket fields
+- Behavior when the ASG is not found
+- Replacement request for an old unhealthy target
+- Skipping an instance within the launch grace period
+
+The Lambda tests validate recovery logic using test doubles/mocks. They do not independently prove that a real AWS instance was replaced.
+
+## Build and Run with Docker
+
+Build the image:
+
+```bash
 docker build -t helpdesk:local .
-docker run --rm -p 5000:5000 helpdesk:local
-~~~
+```
 
-## AWS deployment with Terraform
+Run it:
 
-**Cost and security warning:** applying this configuration creates billable resources, including an Application Load Balancer, Lambda invocations/logs, and EC2 capacity. Review the plan and your AWS budget before applying. Use a sandbox account and destroy resources when finished. The demo uses public subnets and HTTP only; do not use it as-is for sensitive production traffic.
+```bash
+docker run --rm -p 5000:5000 --name helpdesk-local helpdesk:local
+```
 
-### Prerequisites
+Open `http://127.0.0.1:5000`.
 
-- AWS CLI configured for the intended account and region.
-- Terraform 1.6 or newer.
-- Docker and permission to push to Amazon ECR.
-- IAM permissions to create the resources in the Terraform plan.
+## AWS Deployment
 
-### 1. Bootstrap the infrastructure with zero EC2 instances
+> **Cost and security warning:** AWS resources such as EC2, an Application Load Balancer, ECR storage, and CloudWatch may incur charges. This demo uses HTTP and public-subnet infrastructure; do not use it unchanged for sensitive production traffic.
 
-Start with zero instances so user data does not try to pull an ECR image before Jenkins publishes it.
+### 1. Configure Terraform
 
-~~~bash
+Configure AWS credentials securely, then:
+
+```bash
 cd terraform
 cp terraform.tfvars.example terraform.tfvars
-# Keep desired_capacity = 0 for the initial bootstrap.
 terraform init
 terraform fmt -check
 terraform validate
 terraform plan
-~~~
+```
 
-Review the plan, especially the ALB and other billable resources. Apply only after confirming the resources and account:
+Review the plan carefully before applying:
 
-~~~bash
+```bash
 terraform apply
-~~~
+```
 
-This creates the ECR repository, ALB/target group, ASG with zero desired capacity, and Lambda recovery schedule.
+Follow the bootstrap procedure in your Terraform configuration and Jenkins pipeline. If the launch template pulls an image from ECR during startup, ensure that the image has been published before launching application instances.
 
-### 2. Configure Jenkins and publish an image
+### 2. Run the Jenkins pipeline
 
-The Jenkinsfile expects:
-- Jenkins tool named SonarScanner.
-- SonarQube server configuration named SonarQube.
-- Jenkins credential ID aws-ecr-credentials containing an AWS access key and secret key with least-privilege ECR push permissions.
-- Docker, AWS CLI, Python, pip, and pytest available on the Jenkins agent.
-- The ECR repository and ASG created by the bootstrap apply.
+The pipeline is configured to perform these steps:
 
-Run the pipeline. It runs tests and the SonarQube quality gate before building and pushing the build-number tag and latest to ECR. Its deployment stage requests one ASG instance and starts an instance refresh. After the pipeline, set desired_capacity = 1 in terraform/terraform.tfvars and run terraform plan followed by terraform apply to reconcile Terraform state with the deployed capacity. Keep the value at zero only when you intentionally want the ASG scaled down.
+1. Check out the source code.
+2. Check required tools.
+3. Install dependencies.
+4. Run automated tests.
+5. Run SonarQube analysis.
+6. Evaluate the quality gate.
+7. Build the Docker image.
+8. Push the image to Amazon ECR.
+9. Deploy through the configured ASG instance-refresh workflow.
 
-### 3. Verify the application and recovery
+The recorded successful Jenkins build was `help-desk-ci-pipeline` build **#13**.
 
-1. Confirm the ASG desired capacity is one and an EC2 instance is InService.
-2. Confirm the target group reports the target healthy.
-3. Open the Terraform output helpdesk_url.
-4. In a sandbox only, perform a controlled failure test on an application instance.
-5. Check Lambda's CloudWatch Logs, ASG activity history, EC2 replacement status, and ALB target health.
-6. Verify the replacement becomes healthy and the application URL recovers.
+Ensure Jenkins has the required tool configurations, AWS credentials, Docker access, and SonarQube connection. Use least-privilege permissions and never commit secrets to Git.
 
-The Lambda runs every five minutes and skips instances younger than five minutes. An older instance is replaced if an EC2 status check is impaired or its ALB target state is unhealthy. The Lambda calls TerminateInstanceInAutoScalingGroup with ShouldDecrementDesiredCapacity = false; the ASG launches a replacement at the configured desired capacity.
+A Jenkins deployment or successful instance refresh is separate from Lambda-triggered self-healing.
 
-Do not claim a recovery test passed until it has actually been run and its AWS evidence captured. A scheduled check can take several minutes to detect and replace an instance. It is not a sub-minute recovery guarantee.
+### 3. Verify the AWS deployment
 
-## Screenshots
+- Confirm the ASG has the intended desired capacity.
+- Confirm the EC2 instance reaches `InService`.
+- Confirm the ALB target becomes `Healthy`.
+- Open the Terraform output `helpdesk_url`.
+- Test the application's `/health` endpoint.
+- Review Lambda logs and ASG activity history when testing recovery.
 
-Place real screenshots in docs/screenshots/. Suggested captures:
-- helpdesk-dashboard.png — UI with example ticket data.
-- jenkins-pipeline.png — successful pipeline and quality gate.
-- lambda-cloudwatch-logs.png — recovery handler logs.
-- autoscaling-activity.png — replacement activity history.
-- target-group-health.png — target health before and after a test.
+## Self-Healing Configuration
 
-Redact account identifiers or sensitive details where appropriate. Screenshots are intentionally not fabricated.
+The recovery function is located at `terraform/lambda_recovery.py`.
 
-## Current limitations and next improvements
+| Environment variable | Purpose |
+|---|---|
+| `ASG_NAME` | Name of the Auto Scaling Group to inspect |
+| `TARGET_GROUP_ARN` | ARN of the ALB target group |
+| `GRACE_PERIOD_SECONDS` | Minimum instance age before recovery evaluation |
 
-- Tickets are stored in an in-memory Python list; a restart clears them. Add DynamoDB or RDS for persistence.
-- The health endpoint confirms the Flask process responds, but does not validate every dependency.
-- The recovery Lambda uses a five-minute polling schedule and may take several minutes to detect a failure.
-- The demo is HTTP-only. Add HTTPS with ACM and a secure listener before any real deployment.
-- Public-subnet instances need outbound internet access for package installation and ECR image pulls. A production design should use private application subnets with appropriate VPC endpoints/NAT and tighter egress rules.
-- Recovery terminates an unhealthy instance so the ASG can replace it; it does not fix application bugs in the Docker image.
-- IAM policies should be narrowed to the exact ASG and resources for production use.
+Current configured grace period: **300 seconds (5 minutes)**.
+
+The function checks:
+
+- EC2 system status is `impaired`.
+- EC2 instance status is `impaired`.
+- ALB target health state is `unhealthy`.
+
+When an eligible instance meets a configured failure condition, Lambda calls Auto Scaling to terminate the instance without reducing desired capacity. The ASG can then launch a replacement.
+
+### Recovery Test Checklist
+
+In a sandbox environment where temporary downtime is acceptable:
+
+- [ ] Record the current instance ID and confirm its target is healthy.
+- [ ] Confirm the EventBridge schedule and Lambda permissions.
+- [ ] Trigger a controlled unhealthy condition.
+- [ ] Find the recovery decision in CloudWatch Logs.
+- [ ] Check Auto Scaling activity history for the replacement.
+- [ ] Verify the replacement instance reaches `InService`.
+- [ ] Verify the ALB target becomes `Healthy`.
+- [ ] Confirm the application responds again.
+
+The Lambda schedule runs every five minutes. Detection and recovery may take several minutes, depending on health-check thresholds, scheduling, and the grace period. This is not a sub-minute recovery guarantee.
+
+## Monitoring and Troubleshooting
+
+Open:
+
+**AWS Console → Lambda → `self-healing-help-desk-recovery` → Monitor → View CloudWatch logs**
+
+Useful log messages include:
+
+- `Skipping ... within launch grace period.` — the instance is too new for recovery evaluation.
+- `Replacing ...` — Lambda has requested instance replacement.
+- `No InService instances ...` — no eligible instances were found in the ASG response.
+- `was not found` — the configured ASG name could not be found.
+
+Also inspect:
+
+- EC2 status checks
+- ASG Activity history
+- ALB target health reason
+- Docker container state and EC2 bootstrap logs
+- Lambda execution role permissions
+- Lambda environment variables
+
+## Known Limitations
+
+- **In-memory tickets:** Ticket data is stored in process memory and is lost when the application restarts. DynamoDB or RDS could provide persistence.
+- **Instance recovery, not code repair:** The Lambda replaces an unhealthy instance; it does not diagnose or fix application-code bugs.
+- **Polling interval:** The scheduled recovery process may take several minutes to detect a failure.
+- **HTTP-only demo:** HTTPS with ACM should be configured before exposing a production application.
+- **Networking:** Public-subnet instances and outbound access are used for the demo. A production design should evaluate private subnets, VPC endpoints or NAT, and tighter egress rules.
+- **IAM:** Review and restrict permissions before any production use.
 
 ## Cleanup
 
-When finished, scale the ASG to zero and destroy the stack after reviewing the plan:
+Review the Terraform destroy plan before deleting resources:
 
-~~~bash
+```bash
+cd terraform
+terraform plan -destroy
+```
+
+If the plan contains only resources belonging to this project and you intend to remove them:
+
+```bash
 terraform destroy
-~~~
+```
 
-Review the plan carefully. ECR images or resources outside this Terraform state may need separate cleanup.
+Confirm the plan before proceeding. Resources outside the Terraform state, including leftover ECR images, may need separate cleanup.
 
 ## Author
 
-**Venkata Sai Kiran Nadupuru**  
+**Venkata Sai Kiran Nadupuru**
+
 GitHub: [@venkatasaikirannadupuru](https://github.com/venkatasaikirannadupuru)
