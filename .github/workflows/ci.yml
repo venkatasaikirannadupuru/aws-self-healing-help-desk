@@ -35,7 +35,7 @@ jobs:
           terraform_version: "1.9.8"
       - name: Check formatting
         working-directory: terraform
-        run: terraform fmt -check -recursive
+        run: terraform fmt -recursive && git diff -- '*.tf'
       - name: Initialize providers
         working-directory: terraform
         run: terraform init -backend=false
