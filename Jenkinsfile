@@ -121,6 +121,77 @@ pipeline {
                 }
             }
         }
+
+        stage('Deploy to EC2 Auto Scaling Group') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'aws-ecr-credentials',
+                        usernameVariable: 'AWS_ACCESS_KEY_ID',
+                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                    )
+                ]) {
+                    sh '''
+                        set -eu
+                        set +x
+
+                        ASG_NAME="self-healing-help-desk-asg"
+
+                        echo "Checking that Terraform-created Auto Scaling Group exists..."
+                        aws autoscaling describe-auto-scaling-groups \\
+                          --auto-scaling-group-names "$ASG_NAME" \\
+                          --region "$AWS_DEFAULT_REGION" \\
+                          --query 'AutoScalingGroups[0].AutoScalingGroupName' \\
+                          --output text | grep -qx "$ASG_NAME"
+
+                        echo "Requesting one application instance..."
+                        aws autoscaling update-auto-scaling-group \\
+                          --auto-scaling-group-name "$ASG_NAME" \\
+                          --min-size 1 \\
+                          --desired-capacity 1 \\
+                          --region "$AWS_DEFAULT_REGION"
+
+                        echo "Refreshing instances so they start with the image just pushed to ECR..."
+                        REFRESH_ID=$(aws autoscaling start-instance-refresh \\
+                          --auto-scaling-group-name "$ASG_NAME" \\
+                          --region "$AWS_DEFAULT_REGION" \\
+                          --preferences '{"MinHealthyPercentage":0,"MaxHealthyPercentage":100,"InstanceWarmup":240}' \\
+                          --query 'InstanceRefreshId' \\
+                          --output text)
+
+                        echo "Instance refresh ID: $REFRESH_ID"
+                        i=0
+                        while [ "$i" -lt 100 ]; do
+                          STATUS=$(aws autoscaling describe-instance-refreshes \\
+                            --auto-scaling-group-name "$ASG_NAME" \\
+                            --instance-refresh-ids "$REFRESH_ID" \\
+                            --region "$AWS_DEFAULT_REGION" \\
+                            --query 'InstanceRefreshes[0].Status' \\
+                            --output text)
+                          echo "Instance refresh status: $STATUS"
+
+                          if [ "$STATUS" = "Successful" ]; then
+                            echo "EC2 deployment completed. Verify the ALB target health and /health endpoint."
+                            exit 0
+                          fi
+
+                          case "$STATUS" in
+                            Failed|Cancelled|RollbackFailed|RollbackSuccessful|RollbackCancelled)
+                              echo "Instance refresh ended with status: $STATUS"
+                              exit 1
+                              ;;
+                          esac
+
+                          i=$((i + 1))
+                          sleep 12
+                        done
+
+                        echo "Timed out waiting for deployment. Check Auto Scaling activity, EC2 user-data logs, and ALB target health."
+                        exit 1
+                    '''
+                }
+            }
+        }
     }
 
     post {
