@@ -13,15 +13,23 @@ flowchart TD
     ALB --> TG[Target group health check: GET /health]
     TG --> EC2[EC2 instance running Flask container]
     EC2 --> App[IT Help Desk UI and ticket endpoints]
-    TG -. unhealthy instance .-> ASG
-    ASG -. replace unhealthy EC2 .-> LT
+    Schedule[CloudWatch Events schedule: every 5 minutes] --> Lambda[Recovery Lambda]
+    Lambda --> ASG
+    Lambda --> EC2
+    TG -. unhealthy target .-> Lambda
+    ASG -. replacement instance .-> LT
 ~~~
 
 ## Recovery behavior
 
-1. The ALB periodically requests GET /health from registered instances.
-2. If an instance fails target-group health checks, the ALB marks it unhealthy.
-3. The Auto Scaling Group uses ELB health checks and can replace an unhealthy instance to restore desired capacity.
-4. A replacement instance uses Launch Template user data to install Docker, authenticate to ECR with its IAM instance profile, and start the selected image tag.
+1. The CloudWatch Events (EventBridge) schedule invokes the recovery Lambda every five minutes.
+2. Lambda discovers current InService instances from the Auto Scaling Group; it does not hard-code an EC2 instance ID.
+3. It checks EC2 system/instance status and Application Load Balancer target health.
+4. Instances younger than the five-minute launch grace period are skipped to avoid terminating instances while user data and Docker are starting.
+5. An older instance with an impaired EC2 status check or an unhealthy ALB target is terminated with ShouldDecrementDesiredCapacity = false.
+6. The Auto Scaling Group launches a replacement to restore desired capacity. Launch-template user data installs Docker, authenticates to ECR using the instance profile, pulls the configured image tag, and runs the container on port 5000.
+7. Recovery decisions are written to the Lambda CloudWatch Logs group.
 
-**Important:** This is instance-level recovery, not durable ticket storage. The current Flask app stores tickets in memory, so tickets disappear when a process or instance restarts. Use a database before treating this as a production help-desk service.
+This is a scheduled health-check and replacement workflow, not a direct EC2 reboot. Termination lets the ASG replace an unhealthy instance and re-run its bootstrapping. It does not remediate an application bug present in the image.
+
+**Important:** Tickets are held in an in-memory Python list and disappear when the application process or instance restarts. Use durable storage before treating this as a production help-desk service.
