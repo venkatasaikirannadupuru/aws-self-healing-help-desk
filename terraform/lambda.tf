@@ -42,7 +42,7 @@ data "aws_iam_policy_document" "lambda_recovery" {
     sid       = "ReplaceUnhealthyGroupInstances"
     effect    = "Allow"
     actions   = ["autoscaling:TerminateInstanceInAutoScalingGroup"]
-    resources = ["*"]
+    resources = [aws_autoscaling_group.app.arn]
   }
 }
 
