@@ -111,6 +111,11 @@ pipeline {
                         docker push \
                           "$ECR_REGISTRY/$ECR_REPOSITORY:$BUILD_NUMBER"
 
+                        docker tag \
+                          "$IMAGE_NAME:$BUILD_NUMBER" \
+                          "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+                        docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+
                         docker logout "$ECR_REGISTRY"
                     '''
                 }
